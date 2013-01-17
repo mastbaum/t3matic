@@ -1,0 +1,168 @@
+<html>
+ <head>
+  <title>t3matic</title>
+ </head>
+ <body>
+  <table style="width:100%">
+   <tr>
+    <td valign="bottom">
+     <h1>t3matic</h1>
+     <h3>making the most of someone else's cluster.</h3>
+    </td>
+    <td><img src="/t3matic/history/history.png" style="float:right"></td>
+   </tr>
+  </table>
+  <hr/>
+  <div id="error"></div>
+  <div id="content" style="display:none;">
+   <form id="settings-form">
+    <input type="hidden" name="rev"/>
+    <h2>cluster settings</h2>
+    <table style="text-align:left;">
+     <tr>
+      <th>target queue slots</th>
+      <td><input type="number" name="target_queue_slots"/></td>
+      <td>aim to keep this many jobs in the queue</td>
+     </tr>
+     <tr>
+      <th>output location</th>
+      <td><input type="text" name="output_location" size="50"/></td>
+      <td>files are written here</td>
+     </tr>
+     <tr>
+      <th>long job time</th>
+      <td><input type="number" name="long_job_time" size="50"/></td>
+      <td>job duration considered too long (seconds)</td>
+     </tr>
+     <tr>
+      <th>long job count</th>
+      <td><input type="number" name="long_job_count" size="50"/></td>
+      <td>maximum number of long jobs. if exceeded, everything is stopped.</td>
+     </tr>
+    </table>
+    <h2>signals <a href="#" id="signal-new">(new)</a></h2>
+    <table id="signals-table" style="text-align:left;">
+     <tr>
+      <th></th>
+      <th>signal</th>
+      <th>rate (ev/yr)</th>
+      <th>rat version</th>
+      <th>macro <span style="color:red">must take less than 15 minutes on t3</span></th>
+     </tr>
+    </table>
+    <input type="submit" value="save"/>
+   </form>
+  </div>
+  <hr/>
+  <b>about:</b> t3matic runs rat simulations on a condor cluster. it keeps about "target queue slots" jobs in the system at any time, roughly in proportion to the rates associated with the signals.
+  <hr/>
+  <i>2012-2013 Andy Mastbaum <a href="mailto:mastbaum@hep.upenn.edu">mastbaum@hep.upenn.edu</a></i>
+ </body>
+
+ <script type="text/javascript" src="/_utils/script/jquery.js?1.6.2"></script>
+ <script type="text/javascript" src="/_utils/script/jquery.couch.js?0.11.0"></script>
+ <script>
+  var db = $.couch.db('t3matic');
+
+  // when submit button is clicked, compile the config document
+  // from the form and save it.
+  $('input[type="submit"]').live('click', function(e) {
+    e.preventDefault();
+    var d = {
+     _id: 'config',
+     _rev: $('input[name="rev"]').val(),
+     target_queue_slots: Number($('input[name="target_queue_slots"]').val()),
+     long_job_time: Number($('input[name="long_job_time"]').val()),
+     long_job_count: Number($('input[name="long_job_count"]').val()),
+     rat_versions: rat_versions,
+     output_location: $('input[name="output_location"]').val(),
+     signals: {}
+    };
+    $('.signal').each(function(i, o) {
+      var name = $(o).find('input[name="name"]').val();
+      var rate = $(o).find('input[name="rate"]').val();
+      var macro = $(o).find('textarea[name="macro"]').val();
+      var rat_version = $(o).find('input[type="radio"]:checked').val();
+      d.signals[name] = {
+       rate: Number(rate),
+       macro: macro,
+       rat_version: rat_versions[rat_version]
+      }
+    });
+    db.saveDoc(d, {
+     success: function(d) {
+      // get and store new revision id
+      db.openDoc('config', {
+       success: function(doc) {
+        $('input[name="rev"]').val(doc._rev);
+        $('#saved').append(' ' + doc._rev);
+       }
+      });
+      $('#error').html('<h1 style="color:green" id="saved">saved</h1>');
+     },
+     error: function(e, msg) {
+      $('#error').html('<h1 style="color:red">error!</h1><h2>' + e + ': ' + msg + '</h2>');
+     }
+    });
+  });
+
+  // when an 'x' is clicked, remove the signal row from the dom
+  // it'll be excluded on the next save
+  $('a.signal-delete').live('click', function(e) {
+   e.preventDefault();
+   $(this).closest('.signal').remove();
+  });
+
+  // when (new) is clicked, add a blank for to the signal table
+  // it'll be included on the next save
+  $('a#signal-new').live('click', function(e) {
+   e.preventDefault();
+   var html = '<tr class="signal">';
+   html += '<th valign="top"><a href="#" class="signal-delete">x</a></th>';
+   html += '<th valign="top"><input type="text" name="name"/></td>';
+   html += '<td valign="top"><input type="text" name="rate"/></td>';
+   html += '<td valign="top">';
+   for (k in rat_versions) {
+    html += '<input type="radio" name="rat_version_' + Math.floor(Math.random()*100) + '" value="' + k + '"/>' + k + '<br/>';
+   }
+   html += '</td>';
+   html += '<td><textarea rows="7" cols="60" name="macro"></textarea></td>';
+   html += '</tr>';
+   $('#signals-table').append(html);
+  });
+
+  var rat_versions = {};
+
+  // build the page from the config document
+  db.openDoc('config', {
+   'success': function(doc) {
+    rat_versions = doc.rat_versions;
+    $('input[name="target_queue_slots"]').val(doc.target_queue_slots);
+    $('input[name="rev"]').val(doc._rev);
+    $('input[name="output_location"]').val(doc.output_location);
+    $('input[name="long_job_time"]').val(doc.long_job_time);
+    $('input[name="long_job_count"]').val(doc.long_job_count);
+    for (signal in doc.signals) {
+     var html = '<tr class="signal">';
+     html += '<th valign="top"><a href="#" class="signal-delete">x</a></th>';
+     html += '<th valign="top">' + signal + '<input type="hidden" name="name" value="' + signal + '"/></td>';
+     html += '<td valign="top"><input type="text" name="rate" value="' + doc.signals[signal].rate + '"/></td>';
+     html += '<td valign="top">';
+     for (k in rat_versions) {
+       var rat_version = doc.signals[signal].rat_version;
+       html += '<input type="radio" name="rat_version_' + signal + '" value="' + k + '"' + (rat_version==rat_versions[k] ? ' checked' : '') + '/>' + k + '<br/>';
+     }
+     html += '</td>';
+     html += '<td><textarea rows="7" cols="60" name="macro">' + doc.signals[signal].macro + '</textarea></td>';
+     html += '</tr>';
+     $('#signals-table').append(html);
+    }
+    $('#content').show();
+   },
+   'error': function(e, msg) {
+    $('#error').html('<h1 style="color:red">oh no! an error!</h1><h2>' + e + ': ' + msg + '</h2>');
+   }
+  });
+ </script>
+</html>
+

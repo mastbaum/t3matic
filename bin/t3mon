@@ -1,0 +1,155 @@
+#!/usr/bin/env python
+'''Monitor the t3matic Condor queue.
+
+A. Mastbaum <mastbaum@hep.upenn.edu>, 2012-2013
+
+Check the queue state periodically, update a plot, and upload both the plot and
+new times series information to the t3matic database's history document.
+'''
+
+import sys
+import time
+from datetime import datetime
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from t3matic.condor import CondorStatus
+
+sys.path.insert(0, '.')
+import settings
+
+def main(host, db, our_user, interval=60):
+    '''
+    Sample the cluster state periodically to make a plot.
+
+    Updates a plot attached to the config document in the provided DB.
+
+    :param host: Hostname of Condor master
+    :param db: CouchDB database with t3matic config
+    :param our_user: Our username in Condor
+    :param interval: Number of seconds between samples 
+    '''
+    condor = CondorStatus(host)
+
+    while True:
+        update_history_plot(condor, db, our_user)
+        time.sleep(interval)
+
+
+def update_history_plot(condor, db, our_user):
+    '''Update the history usage and plot.
+
+    Attaches the plot to db['history'].
+
+    :param condor: A CondorStatus
+    :param db: A CouchDB instance
+    :param our_user: Our username on the Condor grid
+    '''
+    us_queued = 0
+    us_running = 0
+    them_queued = 0
+    them_running = 0
+    total = 0
+
+    for user, status in condor.users().items():
+        if user == our_user:
+            us_queued += status[1]
+            us_running += status[0]
+            total += sum(status)
+        else:
+            them_queued += status[1]
+            them_running += status[0]
+            total += sum(status)
+
+    try:
+        history = db['history']
+    except Exception:
+        history = {
+            '_id': 'history',
+            'timestamp': [],
+            'us_queued': [],
+            'us_running': [],
+            'them_queued': [],
+            'them_running': [],
+            'total': []
+        }
+
+    history['timestamp'].append(int(time.time()))
+    history['us_queued'].append(us_queued)
+    history['us_running'].append(us_running)
+    history['them_queued'].append(them_queued)
+    history['them_running'].append(them_running)
+    history['total'].append(total)
+
+    db.save(history)
+
+    clip_1h = time.time() - 60.0 * 60.0  # 1 hour ago
+    clip_12h = time.time() - 12.0 * 60.0 * 60.0  # 12 hours ago
+    idx_1h = np.abs(np.array(history['timestamp']) - clip_1h).argmin()
+    idx_12h = np.abs(np.array(history['timestamp']) - clip_12h).argmin()
+
+    history_1h = {}
+    history_12h = {}
+    for stat in ['timestamp', 'us_queued', 'them_queued', 'us_running', 'them_running', 'total']:
+        history_1h[stat] = history[stat][idx_1h:]
+        history_12h[stat] = history[stat][idx_12h:]
+
+    f = plt.figure(1, facecolor='white', figsize=(7, 1.25))
+
+    ax1 = plt.subplot2grid((1, 3), (0, 0), colspan=2)
+    ax2 = plt.subplot2grid((1, 3), (0, 2))
+
+    dates_1h = map(datetime.fromtimestamp, history_1h['timestamp'])
+    dates_12h = map(datetime.fromtimestamp, history_12h['timestamp'])
+    ax1.plot_date(dates_12h, history_12h['total'], label='total', fmt='-')
+    ax1.plot_date(dates_12h, history_12h['us_running'], label='us (R)', fmt='-')
+    ax1.plot_date(dates_12h, history_12h['us_queued'], label='us (I)', fmt='-')
+    ax1.plot_date(dates_12h, history_12h['them_running'], label='them (R)', fmt='-')
+    ax1.plot_date(dates_12h, history_12h['them_queued'], label='them (I)', fmt='-')
+
+    ax2.plot_date(dates_1h, history_1h['total'], label='total', fmt='-')
+    ax2.plot_date(dates_1h, history_1h['us_running'], label='us (R)', fmt='-')
+    ax2.plot_date(dates_1h, history_1h['us_queued'], label='us (I)', fmt='-')
+    ax2.plot_date(dates_1h, history_1h['them_running'], label='them (R)', fmt='-')
+    ax2.plot_date(dates_1h, history_1h['them_queued'], label='them (I)', fmt='-')
+
+    box = ax2.get_position()
+    ax2.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+    ax2.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+    f.autofmt_xdate()
+    f.savefig('history.png', bbox_inches='tight')
+
+    with open('history.png', 'rb') as f:
+        db.put_attachment(db['history'], f)
+
+    plt.clf()
+
+    print 'updated', datetime.fromtimestamp(time.time())
+
+
+if __name__ == '__main__':
+    import couchdb
+
+    font = {'weight' : 'normal',
+            'size'   : 8}
+    matplotlib.rc('font', **font)
+
+    try:
+        host = sys.argv[1]
+    except IndexError:
+        print 'Usage: %s condor_host' % sys.argv[0]
+        sys.exit(1)
+
+    couch = couchdb.Server(settings.host)
+
+    if settings.username and settings.password:
+        couch.resource.credentials = (settings.username, settings.password)
+
+    db = couch[settings.dbname]
+
+    user = settings.condor_user
+
+    main(host, db, user)
+

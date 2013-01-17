@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+'''t3matic: "Making the most of someone else's cluster"
+
+A. Mastbaum <mastbaum@hep.upenn.edu>, 2012-2013
+
+t3matic runs rat simulations on a Condor cluster. it keeps a given number of
+jobs in the system at any time, roughly in proportion to the rates
+associated with user-specified signals and backgrounds.
+'''
+
+import sys
+import time
+import datetime
+from t3matic.condor import RATCondor
+from t3matic.utils import read_config_db
+
+sys.path.insert(0, '.')
+
+def main(host, interval=600):
+    '''Load a configuration and fill the queue on a fixed interval.
+
+    :param host: Hostname of Condor master
+    :param interval: Interval with which to check and top off queue
+    '''
+    from t3matic.utils import email
+    import settings
+    condor = RATCondor(host)
+
+    while True:
+        config = read_config_db(settings.host, settings.dbname,
+                                settings.username, settings.password)
+
+        user = settings.condor_user
+
+        # stop everything if our jobs are taking a long time
+        # as something is probably broken
+        long_job_time = config['long_job_time']
+        long_job_count = config['long_job_count']
+        job_durations = condor.job_durations(user=user, min_time=long_job_time)
+        if len(job_durations) > long_job_count:
+            error_message = 't3matic: shutting down due to long jobs: %s' % job_durations
+            print error_message
+            condor('rm', '-u %s' % settings.condor_user)
+            try:
+                email(settings.notify_list, 't3matic error', error_message)
+            except NameError:
+                pass
+            sys.exit(1)
+
+        target_queue_slots = config['target_queue_slots']
+        output_location = config['output_location']
+        signals = config['signals']
+        exe_dir = settings.exe_dir
+        initial_dir = settings.initial_dir
+
+        jobs_added = condor.fill_queue(user, signals, target_queue_slots,
+                                       initial_dir, exe_dir, output_location)
+
+        print datetime.datetime.fromtimestamp(time.time())
+        print 'added %i jobs' % jobs_added
+        print 'status:', condor.job_type_count(user=user)
+
+        time.sleep(interval)
+
+
+if __name__ == '__main__':
+    try:
+        host = sys.argv[1]
+    except IndexError:
+        print 'Usage: %s condor_host [interval]' % sys.argv[0]
+        sys.exit(1)
+
+    interval = float(sys.argv[2] if len(sys.argv)>2 else 600)
+
+    main(host, interval=interval)
+
