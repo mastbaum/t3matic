@@ -40,9 +40,9 @@ def main(host, interval=600):
         if len(job_durations) > long_job_count:
             error_message = 't3matic: shutting down due to long jobs: %s' % job_durations
             print error_message
-            condor('rm', '-u %s' % settings.condor_user)
+            condor('rm', '%s' % settings.condor_user_short)
             try:
-                email(settings.notify_list, 't3matic error', error_message)
+                email(settings.notify_list, 't3matic error', 't3matic shutdown: long jobs: %s' % job_durations)
             except NameError:
                 pass
             sys.exit(1)
@@ -70,7 +70,7 @@ if __name__ == '__main__':
         print 'Usage: %s condor_host [interval]' % sys.argv[0]
         sys.exit(1)
 
-    interval = float(sys.argv[2] if len(sys.argv)>2 else 600)
+    interval = float(sys.argv[2] if len(sys.argv)>2 else 120)
 
     main(host, interval=interval)
 

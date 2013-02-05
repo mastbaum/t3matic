@@ -19,7 +19,7 @@ initialdir = %{initial_dir}
 log = /dev/null
 output = /dev/null
 error = /dev/null
-arguments = %{rat_version} %{macro} -l /dev/null -o %{output_location}/%{name}-%{job_id}-$(Process).root
+arguments = %{rat_version} %{macro} -l /dev/null -o %{output_location}/%{name}-%{job_id}-$(Cluster)-$(Process).root
 notification = Never
 getenv = True
 nice_user = True
@@ -130,8 +130,6 @@ class CondorStatus:
 
         durations = {}
 
-        print stdout
-
         for line in stdout.split('\n'):
             if len(line) == 0:
                 continue
@@ -221,6 +219,7 @@ class RATCondor(CondorStatus):
                 f.flush()
                 self.sftp_put(f.name, 't3matic/%s' % macro)
 
+            print '%s: %s (%i)' % (job_id, macro, job_count)
             stdout, stderr = self('submit', 't3matic/submit_%s' % job_id)
             if len(stderr) > 0:
                 sys.stderr.write('error with %s %s: %s' % (k, job_id, stderr))
