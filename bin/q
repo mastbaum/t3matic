@@ -67,13 +67,9 @@ def main(argv):
     env_file = save_env(extra={'QCMD': ' '.join(argv)})
     env_dir = os.path.dirname(env_file)
 
-    if argv[0] == '-N':
-        job_name = argv[1]
-        argv = argv[2:]
-    else:
-        job_name = os.path.basename(argv[0])
-    
-    options = ['-N', job_name]
+    job_name = os.path.basename(argv[0])
+
+    options = ['-N', job_name, '-p', '-1023']  # -1023 is minimum priority
 
     qcmd = 'qsub'
     qcmd_args = options + ['-o', env_dir, '-e', env_dir,  '-S', '/bin/bash', batch_script, env_file] + argv
