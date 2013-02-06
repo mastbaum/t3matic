@@ -91,8 +91,6 @@ class CondorStatus(ClusterStatus):
 
         durations = {}
 
-        print stdout
-
         for line in stdout.split('\n'):
             if len(line) == 0:
                 continue
@@ -184,6 +182,7 @@ queue %{job_count}
                 f.flush()
                 self.sftp_put(f.name, 't3matic/%s' % macro)
 
+            print '%s: %s (%i)' % (job_id, macro, job_count)
             stdout, stderr = self('submit', 't3matic/submit_%s' % job_id)
             if len(stderr) > 0:
                 sys.stderr.write('error with %s %s: %s' % (k, job_id, stderr))

@@ -5,7 +5,8 @@ username = 'USER'
 password = 'SECRETPASSWORD'
 
 # condor
-condor_user = 'CONDOR_USER'
+user_short = 'username'
+user = 'nice-user.username@example.com'
 initial_dir = '/tmp/t3matic'
 exe_dir = '/srv/t3matic'
 
