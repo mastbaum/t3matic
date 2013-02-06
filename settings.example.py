@@ -4,11 +4,14 @@ dbname = 't3matic'
 username = 'USER'
 password = 'SECRETPASSWORD'
 
-# condor
+# cluster
 user_short = 'username'
 user = 'nice-user.username@example.com'
 initial_dir = '/tmp/t3matic'
 exe_dir = '/srv/t3matic'
+
+# ge only
+queue = 'queuename.q'
 
 # notifications
 smtp_server = 'localhost'

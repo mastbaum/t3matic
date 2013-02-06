@@ -28,9 +28,11 @@ def main(type, host, interval=600):
     from t3matic.utils import email
     import settings
 
-    try:
+    if type == 'ge':
+        cluster = cluster_types[type](host, settings.queue)
+    elif type == 'condor':
         cluster = cluster_types[type](host)
-    except KeyError:
+    else:
         raise Exception('Unknown cluster type "%s"' % type)
 
     while True:

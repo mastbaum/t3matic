@@ -18,8 +18,10 @@ class GEStatus(ClusterStatus):
     information as Python objects.
 
     :param host: Head node hostname
+    :param queue: Name of the GE queue to use
     '''
-    def __init__(self, host):
+    def __init__(self, host, queue):
+        self.queue = queue
         ClusterStatus.__init__(self, host, 'q')
 
     def rm(self, user):
@@ -34,14 +36,14 @@ class GEStatus(ClusterStatus):
 
         :returns: {'username': (running, idle, other)} dict
         '''
-        stdout, stderr = self._exec("qstat -u '*'")
+        stdout, stderr = self._exec("qstat -u '*' -q %s" % self.queue)
 
         jobs = []
         for line in stdout.split('\n')[2:]:
             if len(line) == 0:
                 continue
             try:
-                _jobid, _prio, _script, user, state, _date, _time, _queue, _slots = line.split()
+                _jobid, _prio, _script, user, state, _date, _time, _queue_slots = line.split(None, 7)
                 jobs.append((user, state))
             except ValueError:
                 continue
@@ -70,7 +72,7 @@ class GEStatus(ClusterStatus):
         :param extract_macro_basename: If True, use the RAT macro name as the command name
         :returns: {'command': count} dict
         '''
-        stdout, stderr = self._exec("qstat -j '*' -xml")
+        stdout, stderr = self._exec("qstat -j '*' -xml -q %s" % self.queue)
         root = ET.fromstring(stdout)
 
         jobs = {}
@@ -100,7 +102,7 @@ class GEStatus(ClusterStatus):
         :oaram min_time: Only show jobs running longer than min_time (seconds)
         :returns: {'job id': duration} dict
         '''
-        stdout, stderr = self._exec("qstat -u '*'")
+        stdout, stderr = self._exec("qstat -u '*' -q %s" % self.queue)
 
         min_time = timedelta(0, min_time)
         durations = {}
@@ -109,7 +111,7 @@ class GEStatus(ClusterStatus):
             if len(line) == 0:
                 continue
 
-            jobid, _prio, _script, _user, state, date, time, _queue, _slots = line.split()
+            jobid, _prio, _script, _user, state, date, time, _queue_slots = line.split(None, 7)
 
             if user != _user:
                 continue
@@ -156,7 +158,7 @@ class RATGE(GEStatus):
             if job_count <= 0:
                 continue
 
-            sub_line = utils.MyTemplate('q %{exe_dir}/rat_wrapper.sh %{rat_version} %{initial_dir}/%{macro} -l /dev/null -o %{output_location}/%{name}-%{job_id}-%{id}.root')
+            sub_line = utils.MyTemplate('q -q %{queue} %{exe_dir}/rat_wrapper.sh %{rat_version} %{initial_dir}/%{macro} -l /dev/null -o %{output_location}/%{name}-%{job_id}-%{id}.root')
 
             params = {
                 'job_id': job_id,
@@ -165,7 +167,8 @@ class RATGE(GEStatus):
                 'rat_version': v['rat_version'],
                 'output_location': output_location,
                 'exe_dir': exe_dir,
-                'initial_dir': initial_dir
+                'initial_dir': initial_dir,
+                'queue': self.queue
             }
 
             lines = []

@@ -31,9 +31,11 @@ def main(type, host, db, our_user, interval=60):
     :param our_user: Our cluster username
     :param interval: Number of seconds between samples 
     '''
-    try:
+    if type == 'ge':
+        cluster = cluster_types[type](host, settings.queue)
+    elif type =='condor':
         cluster = cluster_types[type](host)
-    except KeyError:
+    else:
         raise Exception('Unknown cluster type "%s"' % type)
 
     while True:
