@@ -1,0 +1,10 @@
+#!/bin/bash
+source /etc/profile
+source $1
+shift
+cd $PWD
+echo "Running:" $QCMD
+echo "execute node = $HOSTNAME  jobid = $JOB_ID  date ="  `date`
+
+exec $*
+

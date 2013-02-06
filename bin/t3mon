@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Monitor the t3matic Condor queue.
+'''Monitor the t3matic queue.
 
 A. Mastbaum <mastbaum@hep.upenn.edu>, 2012-2013
 
@@ -14,37 +14,41 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from t3matic.condor import CondorStatus
+from t3matic.cluster import ClusterStatus
+from t3matic import cluster_types
 
 sys.path.insert(0, '.')
 import settings
 
-def main(host, db, our_user, interval=60):
+def main(type, host, db, our_user, interval=60):
     '''
     Sample the cluster state periodically to make a plot.
 
     Updates a plot attached to the config document in the provided DB.
 
-    :param host: Hostname of Condor master
+    :param host: Hostname of master
     :param db: CouchDB database with t3matic config
-    :param our_user: Our username in Condor
+    :param our_user: Our cluster username
     :param interval: Number of seconds between samples 
     '''
-    condor = CondorStatus(host)
+    try:
+        cluster = cluster_types[type](host)
+    except KeyError:
+        raise Exception('Unknown cluster type "%s"' % type)
 
     while True:
-        update_history_plot(condor, db, our_user)
+        update_history_plot(cluster, db, our_user)
         time.sleep(interval)
 
 
-def update_history_plot(condor, db, our_user):
+def update_history_plot(cluster, db, our_user):
     '''Update the history usage and plot.
 
     Attaches the plot to db['history'].
 
-    :param condor: A CondorStatus
+    :param cluster: A ClusterStatus
     :param db: A CouchDB instance
-    :param our_user: Our username on the Condor grid
+    :param our_user: Our cluster username
     '''
     us_queued = 0
     us_running = 0
@@ -52,7 +56,7 @@ def update_history_plot(condor, db, our_user):
     them_running = 0
     total = 0
 
-    for user, status in condor.users().items():
+    for user, status in cluster.users().items():
         if user == our_user:
             us_queued += status[1]
             us_running += status[0]
@@ -137,9 +141,10 @@ if __name__ == '__main__':
     matplotlib.rc('font', **font)
 
     try:
-        host = sys.argv[1]
+        type = sys.argv[1]
+        host = sys.argv[2]
     except IndexError:
-        print 'Usage: %s condor_host' % sys.argv[0]
+        print 'Usage: %s [type] [host]' % sys.argv[0]
         sys.exit(1)
 
     couch = couchdb.Server(settings.host)
@@ -149,7 +154,7 @@ if __name__ == '__main__':
 
     db = couch[settings.dbname]
 
-    user = settings.condor_user
+    user = settings.user
 
-    main(host, db, user)
+    main(type, host, db, user)
 

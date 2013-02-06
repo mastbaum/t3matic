@@ -4,31 +4,12 @@ import sys
 import math
 import uuid
 import tempfile
-import string
 import paramiko
+import cluster
+import utils
+from cluster import ClusterStatus
 
-class MyTemplate(string.Template):
-    delimiter = '%'
-
-
-submit_script = \
-'''
-universe = vanilla
-Executable = %{exe_dir}/rat_wrapper.sh
-initialdir = %{initial_dir}
-log = /dev/null
-output = /dev/null
-error = /dev/null
-arguments = %{rat_version} %{macro} -l /dev/null -o %{output_location}/%{name}-%{job_id}-$(Process).root
-notification = Never
-getenv = True
-nice_user = True
-
-queue %{job_count}
-'''
-
-
-class CondorStatus:
+class CondorStatus(ClusterStatus):
     '''The status of a Condor cluster.
 
     Just a paramiko wrapper to run condor_X commands and get some interesting
@@ -37,34 +18,14 @@ class CondorStatus:
     :param host: Head node hostname
     '''
     def __init__(self, host):
-        self.host = host
-        self.client = paramiko.SSHClient()
-        self.client.load_system_host_keys()
+        ClusterStatus.__init__(host, 'condor_')
 
-    def _exec(self, cmd):
-        '''Run a command on the remote host.
+    def rm(self, user):
+        '''Remove all jobs for a user.
 
-        :param cmd: The command to execute
-        :returns: (stdout, stderr) tuple
+        :param user: User whose jobs to kill
         '''
-        self.client.connect(self.host)
-        _stdin, _stdout, _stderr = self.client.exec_command(cmd)
-        stdout = _stdout.read()
-        stderr = _stderr.read()
-        self.client.close()
-
-        return stdout, stderr
-
-    def __call__(self, command, *args):
-        '''Run the ``condor_<command>`` command on the remote host.
-
-        :param command: The command suffix
-        :param args: The command arguments
-        :returns: (stdout, stderr) tuple
-        '''
-        cmd = 'condor_%s ' % command + ' '.join(args)
-        print cmd
-        return self._exec(cmd)
+        self._exec('condor_rm -u %s' % user)
 
     def users(self):
         '''See who is running how many jobs.
@@ -149,23 +110,25 @@ class CondorStatus:
 
         return durations
 
-    def sftp_put(self, local_path, remote_path):
-        '''Copy a file to the remote host.
-
-        :param local_path: The path to the source file
-        :param remote_path: The destination path
-        :returns: An SFTPAttributes object with information about the file
-        '''
-        self.client.connect(self.host)
-        sftp_client = self.client.open_sftp()
-        results = sftp_client.put(local_path, remote_path)
-        sftp_client.close()
-        self.client.close()
-        return results
-
 
 class RATCondor(CondorStatus):
     '''A CondorStatus specific to running RAT jobs.'''
+    submit_script = \
+'''
+universe = vanilla
+Executable = %{exe_dir}/rat_wrapper.sh
+initialdir = %{initial_dir}
+log = /dev/null
+output = /dev/null
+error = /dev/null
+arguments = %{rat_version} %{macro} -l /dev/null -o %{output_location}/%{name}-%{job_id}-$(Process).root
+notification = Never
+getenv = True
+nice_user = True
+
+queue %{job_count}
+'''
+
     def fill_queue(self, user, signals, target_queue_slots, initial_dir, exe_dir, output_location):
         '''Submit batch jobs to fill the queue up.
 
@@ -187,7 +150,7 @@ class RATCondor(CondorStatus):
         if active_job_count >= 0.9 * target_queue_slots:
             return 0
 
-        submit_script_template = MyTemplate(submit_script)
+        submit_script_template = utils.MyTemplate(RATCondor.submit_script)
 
         jobs_added = 0
 

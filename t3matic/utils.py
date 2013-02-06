@@ -1,5 +1,11 @@
 '''Various utilities.'''
 
+import string
+
+class MyTemplate(string.Template):
+    delimiter = '%'
+
+
 def read_config(path):
     '''Read the configuration from a JSON file.
 

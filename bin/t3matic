@@ -12,35 +12,42 @@ import sys
 import time
 import datetime
 from t3matic.condor import RATCondor
+from t3matic.sge import RATGE
 from t3matic.utils import read_config_db
+from t3matic import cluster_types
 
 sys.path.insert(0, '.')
 
-def main(host, interval=600):
+def main(type, host, interval=600):
     '''Load a configuration and fill the queue on a fixed interval.
 
-    :param host: Hostname of Condor master
+    :param type: Queue type ('ge' or 'condor')
+    :param host: Hostname of master
     :param interval: Interval with which to check and top off queue
     '''
     from t3matic.utils import email
     import settings
-    condor = RATCondor(host)
+
+    try:
+        cluster = cluster_types[type](host)
+    except KeyError:
+        raise Exception('Unknown cluster type "%s"' % type)
 
     while True:
         config = read_config_db(settings.host, settings.dbname,
                                 settings.username, settings.password)
 
-        user = settings.condor_user
+        user = settings.user
 
         # stop everything if our jobs are taking a long time
-        # as something is probably broken
+        # since something is probably broken
         long_job_time = config['long_job_time']
         long_job_count = config['long_job_count']
-        job_durations = condor.job_durations(user=user, min_time=long_job_time)
+        job_durations = cluster.job_durations(user=user, min_time=long_job_time)
         if len(job_durations) > long_job_count:
             error_message = 't3matic: shutting down due to long jobs: %s' % job_durations
             print error_message
-            condor('rm', '-u %s' % settings.condor_user)
+            cluster.rm(settings.user)
             try:
                 email(settings.notify_list, 't3matic error', error_message)
             except NameError:
@@ -53,24 +60,25 @@ def main(host, interval=600):
         exe_dir = settings.exe_dir
         initial_dir = settings.initial_dir
 
-        jobs_added = condor.fill_queue(user, signals, target_queue_slots,
-                                       initial_dir, exe_dir, output_location)
+        jobs_added = cluster.fill_queue(user, signals, target_queue_slots,
+                                        initial_dir, exe_dir, output_location)
 
         print datetime.datetime.fromtimestamp(time.time())
         print 'added %i jobs' % jobs_added
-        print 'status:', condor.job_type_count(user=user)
+        print 'status:', cluster.job_type_count(user=user)
 
         time.sleep(interval)
 
 
 if __name__ == '__main__':
     try:
-        host = sys.argv[1]
+        type = sys.argv[1]
+        host = sys.argv[2]
     except IndexError:
-        print 'Usage: %s condor_host [interval]' % sys.argv[0]
+        print 'Usage: %s [queue type] [host] [interval]' % sys.argv[0]
         sys.exit(1)
 
-    interval = float(sys.argv[2] if len(sys.argv)>2 else 600)
+    interval = float(sys.argv[3] if len(sys.argv)>3 else 600)
 
-    main(host, interval=interval)
+    main(type, host, interval=interval)
 
