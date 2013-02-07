@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# Shovel files off of a server
+#
+# Move files older than a given age to a temporary directory, transfer them
+# with rsync, then delete them. Abort at any stage if something goes wrong,
+# with exit codes 1=bad args, 2=can't create temp dir, 3=can't move a file,
+# 4=rsync error, 5=can't delete temp dir.
+#
+# Usage: $0 DIR AGE DEST
+#
+#   DIR: Directory from which to shovel
+#   AGE: Only shovel files this old (minutes)
+#   DEST: Target location, as in rsync
+#
+# A. Mastbaum <amastbaum@gmail.com>, 2/2013
+#
+
+if [ $# -ne 3 ]
+then
+  echo "Usage: $0 DIR AGE DEST"
+  echo " DIR: Directory from which to shovel"
+  echo " AGE: Only shovel files this old (minutes)"
+  echo " DEST: Target location, as in rsync"
+  exit 1
+fi
+
+SOURCE=$1
+MINAGE=$2
+TARGET=$3
+
+UUID=`uuidgen`
+TEMPDIR=".shovel.${UUID:0:8}"
+
+FILES=(`find $SOURCE -type f -mmin +$MINAGE`)
+NFILES=${#FILES[@]}
+
+if [ $NFILES -eq 0 ]
+then
+  echo "No files to shovel!"
+  exit 0
+fi
+
+echo "Shoveling $NFILES files..."
+
+# create a temporary directory
+mkdir $TEMPDIR
+if [ $? -ne 0 ]
+then
+  echo "Error creating temporary directory $TEMPDIR"
+  exit 2
+fi
+
+# move files to temporary directory
+for file in ${FILES[@]}
+do
+  echo $file
+  mv $file $TEMPDIR
+  if [ $? -ne 0 ]
+  then
+    echo "Error moving file $file."
+    echo "Move incomplete! Check $TEMPDIR."
+    exit 3
+  fi
+done;
+
+# run transfer
+rsync -avPh $TEMPDIR/* $TARGET
+if [ $? -ne 0 ]
+then
+  echo "Error in rsync!"
+  exit 4
+fi
+
+# clean up
+rm -rf $TEMPDIR
+if [ $? -ne 0 ]
+then
+  echo "Unable to remove temporary directory $TEMPDIR"
+  exit 5
+fi
+

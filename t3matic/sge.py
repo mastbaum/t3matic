@@ -6,6 +6,7 @@ import uuid
 import tempfile
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
+from xml.etree.ElementTree import ParseError
 import paramiko
 import utils
 from cluster import ClusterStatus
@@ -73,7 +74,12 @@ class GEStatus(ClusterStatus):
         :returns: {'command': count} dict
         '''
         stdout, stderr = self._exec("qstat -j '*' -xml -q %s" % self.queue)
-        root = ET.fromstring(stdout)
+
+        try:
+            root = ET.fromstring(stdout)
+        except ParseError:
+            # GE returns invalid XML when the queue is empty
+            return {}
 
         jobs = {}
         for _ in root.iter('detailed_job_info'):
