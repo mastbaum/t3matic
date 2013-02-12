@@ -18,7 +18,7 @@ class CondorStatus(ClusterStatus):
     :param host: Head node hostname
     '''
     def __init__(self, host):
-        ClusterStatus.__init__(host, 'condor_')
+        ClusterStatus.__init__(self, host, 'condor_')
 
     def rm(self, user):
         '''Remove all jobs for a user.
