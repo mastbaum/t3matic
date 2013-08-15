@@ -68,6 +68,7 @@ def main(type, host, interval=600):
             except NameError:
                 pass
             paused = True
+            continue
 
         target_queue_slots = config['target_queue_slots']
         output_location = config['output_location']
