@@ -13,7 +13,7 @@ import time
 import datetime
 from t3matic.condor import RATCondor
 from t3matic.sge import RATGE
-from t3matic.utils import read_config_db
+from t3matic.utils import read_config_db, write_unpause_db
 from t3matic import cluster_types
 
 sys.path.insert(0, '.')
@@ -35,11 +35,24 @@ def main(type, host, interval=600):
     else:
         raise Exception('Unknown cluster type "%s"' % type)
 
+    paused = False
     while True:
         config = read_config_db(settings.host, settings.dbname,
                                 settings.username, settings.password)
 
         user = settings.user
+
+        while paused:
+            config = read_config_db(settings.host, settings.dbname,
+                                    settings.username, settings.password)
+            if config['restart']:
+                write_unpause_db(settings.host, settings.dbname,
+                                 settings.username, settings.password)
+                paused = False
+                break
+
+            time.sleep(30)
+            
 
         # stop everything if our jobs are taking a long time
         # since something is probably broken
@@ -54,7 +67,7 @@ def main(type, host, interval=600):
                 email(settings.notify_list, 't3matic error', 't3matic shutdown: long jobs: %s' % job_durations)
             except NameError:
                 pass
-            sys.exit(1)
+            paused = True
 
         target_queue_slots = config['target_queue_slots']
         output_location = config['output_location']

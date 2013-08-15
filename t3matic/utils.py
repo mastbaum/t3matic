@@ -35,6 +35,24 @@ def read_config_db(host, dbname, username, password):
     return config
 
 
+def write_unpause_db(host, dbname, username, password):
+    '''Unset the 'unpause' bit in the DB.
+
+    :param host: Server hostname
+    :param dbname: Database name
+    :param username: CouchDB username (optional)
+    :param password: CouchDB assword (optional)
+    '''
+    import couchdb
+    couch = couchdb.Server(host)
+    if username is not None and password is not None:
+        couch.resource.credentials = (username, password)
+    db = couch[dbname]
+    doc = db['config']
+    doc['restart'] = False
+    db.save(doc)
+
+
 def email(recipients, subject, message, sender=None):
     '''sends a good, old-fashioned email via smtp
 

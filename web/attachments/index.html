@@ -17,7 +17,7 @@
   <div id="content" style="display:none;">
    <form id="settings-form">
     <input type="hidden" name="rev"/>
-    <h2>cluster settings</h2>
+    <h2>cluster settings <a href="#" id="cluster-reset">(reset)</a></h2>
     <table style="text-align:left;">
      <tr>
       <th>target queue slots</th>
@@ -63,6 +63,27 @@
  <script type="text/javascript" src="/_utils/script/jquery.couch.js?0.11.0"></script>
  <script>
   var db = $.couch.db('t3matic');
+
+  // when the reset button is clicked, turn on the reset flag
+  // this will re-start a paused t3matic
+  $('a#cluster-reset').live('click', function(e) {
+    db.openDoc('config', {
+      'success': function(doc) {
+        doc.restart = true;
+        db.saveDoc(doc, {
+          'success': function(d) {
+            $('#error').html('<h1 style="color:green">set paused cluster to restart</h1>');
+          },
+          'error': function(d) {
+            $('#error').html('<h1 style="color:red">oh no! an error!</h1><h2>' + e + ': ' + msg + '</h2>');
+          }
+        });
+      },
+      'error': function(e, msg) {
+        $('#error').html('<h1 style="color:red">oh no! an error!</h1><h2>' + e + ': ' + msg + '</h2>');
+      }
+    });
+  });
 
   // when submit button is clicked, compile the config document
   // from the form and save it.

@@ -25,7 +25,7 @@ class CondorStatus(ClusterStatus):
 
         :param user: User whose jobs to kill
         '''
-        self._exec('condor_rm -u %s' % user)
+        self._exec('condor_rm %s' % user)
 
     def users(self):
         '''See who is running how many jobs.
@@ -119,7 +119,7 @@ initialdir = %{initial_dir}
 log = /dev/null
 output = /dev/null
 error = /dev/null
-arguments = %{rat_version} %{macro} -l /dev/null -o %{output_location}/%{name}-%{job_id}-$(Process).root
+arguments = %{rat_version} %{macro} -l %{output_location}/%{name}-%{job_id}-$(Process).log -o %{output_location}/%{name}-%{job_id}-$(Process).root
 notification = Never
 getenv = True
 nice_user = True
