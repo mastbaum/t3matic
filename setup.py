@@ -8,6 +8,6 @@ setup(
     author_email='mastbaum@hep.upenn.edu',
     packages=['t3matic'],
     scripts=['bin/t3matic', 'bin/t3mon', 'bin/q', 'bin/qbatch.scr'],
-    install_requires=['numpy','matplotlib','paramiko','couchdb'],
+    install_requires=['numpy', 'matplotlib', 'paramiko', 'couchdb', 'lxml'],
 )
 

@@ -7,6 +7,7 @@ import tempfile
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import ParseError
+from lxml.html import soupparser
 import paramiko
 import utils
 from cluster import ClusterStatus
@@ -78,14 +79,19 @@ class GEStatus(ClusterStatus):
         try:
             root = ET.fromstring(stdout)
         except ParseError:
-            # GE returns invalid XML when the queue is empty
-            return {}
+            try:
+                root = soupparser.fromstring(stdout)
+            except ParseError as e:
+                # GE returns invalid XML when the queue is empty
+                print 'job_type_count: error parsing xml:', e
+                return {}
 
         jobs = {}
         for _ in root.iter('detailed_job_info'):
             for dj in _.iter('djob_info'):
                 for job in dj.iter('qmaster_response'):
-                    if job.find('JB_owner').text != user:
+                    owner = job.find('JB_owner')
+                    if owner is None or owner.text != user:
                         continue
                     if status is not None and status != job.get('state'):
                         continue
